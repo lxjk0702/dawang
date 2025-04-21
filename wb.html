@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>小倪连连看</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: linear-gradient(to right, #fdfbfb, #ebedee);
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+    }
+
+    #bgImage {
+      background-image: url('12345.jpg'); /* 背景图路径 */
+      background-size: cover;
+      background-position: center;
+      filter: blur(10px);
+      opacity: 0.3;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    #levelIndicator {
+      font-size: 18px;
+      margin: 10px 0;
+      color: #333;
+    }
+
+    #controls {
+      margin: 10px;
+    }
+
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #gameBoard {
+      display: grid;
+      gap: 2px;
+      justify-content: center;
+      margin: 20px auto;
+      position: relative;
+    }
+
+    .tile {
+      width: 43px;
+      height: 43px;
+      font-size: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .tile:hover {
+      background-color: #eee;
+    }
+
+    .selected {
+      background-color: #ffeb3b;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+
+    #rewardImage {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      color: white;
+      font-size: 24px;
+      flex-direction: column;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+
+    #rewardImage img {
+      max-width: 80%;
+      max-height: 60%;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    #levelMessage {
+      animation: fadeInUp 0.8s ease-out;
+      margin: 10px 0;
+      font-size: 30px;
+      font-weight: bold;
+      color: #ffd700;
+      text-shadow: 1px 1px 4px #000;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0 }
+      to { opacity: 1 }
+    }
+  </style>
+</head>
+<body>
+  <div id="bgImage"></div>
+  <h1>小倪连连看</h1>
+  <div id="levelIndicator">第1关</div>
+
+  <div id="controls">
+    <button id="restartBtn">重新开始本关</button>
+    <button id="resetBtn">重新开始游戏</button>
+  </div>
+
+  <div id="gameBoard"></div>
+  <canvas id="lineCanvas"></canvas>
+
+  <div id="rewardImage">
+    <img src="sleep_reward.jpg" alt="奖励图片">
+    <div id="levelMessage">通关成功</div>
+    <button id="nextLevelBtn">下一关</button>
+  </div>
+
+  <audio id="clickSound" src="click.mp3"></audio>
+  <audio id="matchSound" src="match.m4a"></audio>
+
+  <script>
+    const EMOJIS = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🦒','🐘','🦏','🐪','🐬','🍎','🍌','🍇','🍉','🍊','🍓','🍍','🥕','🥔','🍅','🐔','🐧','🐦','🐤','🦄','🥚','🍭','🍩','🍔','🍕','🥪','🍟','🍗','🥓','🧀'];
+    const messages = [
+      "卸了王者，玩这个吧",
+      "哈哈，这关也简单",
+      "一共5关",
+      "第5关有赢了有惊喜",
+      "结束，睡！！！"
+    ];
+    let level = 1;
+    const maxLevel = 5;
+    let board = [], selected = null;
+    let ROWS = 6, COLS = 6;
+
+    const boardEl = document.getElementById('gameBoard');
+    const canvas = document.getElementById('lineCanvas');
+    const ctx = canvas.getContext('2d');
+    const rewardBox = document.getElementById('rewardImage');
+    const levelMsg = document.getElementById('levelMessage');
+    const nextBtn = document.getElementById('nextLevelBtn');
+
+    function updateSizeByLevel() {
+      if (level === maxLevel) {
+        ROWS = 10;
+        COLS = 9;
+      } else {
+        const total = Math.min(36 + level * 8, 90);
+        ROWS = Math.floor(Math.sqrt(total));
+        COLS = Math.ceil(total / ROWS);
+      }
+    }
+
+    function updateLevelIndicator() {
+      document.getElementById('levelIndicator').textContent = `第${level}关`;
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function generateBoard() {
+      updateSizeByLevel();
+      boardEl.style.gridTemplateRows = `repeat(${ROWS}, 43px)`;
+      boardEl.style.gridTemplateColumns = `repeat(${COLS}, 43px)`;
+
+      const total = ROWS * COLS;
+      const pairsNeeded = Math.floor(total / 2);
+      const emojiCount = Math.min(5 + level * 3, EMOJIS.length);
+      const pool = [];
+      for (let i = 0; i < pairsNeeded; i++) {
+        pool.push(EMOJIS[i % emojiCount], EMOJIS[i % emojiCount]);
+      }
+      if (total % 2 !== 0) pool.push(null);
+      shuffle(pool);
+      if (level === maxLevel) shuffle(pool);
+
+      board = [];
+      for (let r = 0; r < ROWS; r++) {
+        const row = [];
+        for (let c = 0; c < COLS; c++) {
+          row.push(pool[r * COLS + c] ?? '');
+        }
+        board.push(row);
+      }
+    }
+
+    function renderBoard() {
+      boardEl.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const div = document.createElement('div');
+          div.className = 'tile';
+          div.textContent = board[r][c];
+          div.dataset.row = r;
+          div.dataset.col = c;
+          if (!board[r][c]) div.classList.add('empty');
+          div.onclick = () => handleClick(div);
+          boardEl.appendChild(div);
+        }
+      }
+      resizeCanvas();
+    }
+
+    function resizeCanvas() {
+      canvas.width = boardEl.offsetWidth;
+      canvas.height = boardEl.offsetHeight;
+      const rect = boardEl.getBoundingClientRect();
+      canvas.style.top = rect.top + window.scrollY + "px";
+      canvas.style.left = rect.left + window.scrollX + "px";
+    }
+
+    function handleClick(tile) {
+      const r = +tile.dataset.row;
+      const c = +tile.dataset.col;
+      if (!board[r][c]) return;
+      document.getElementById('clickSound').play().catch(()=>{});
+      if (!selected) {
+        selected = tile;
+        tile.classList.add('selected');
+      } else if (selected === tile) {
+        selected.classList.remove('selected');
+        selected = null;
+      } else {
+        const r1 = +selected.dataset.row, c1 = +selected.dataset.col;
+        if (board[r1][c1] === board[r][c]) {
+          const path = findPath(r1, c1, r, c);
+          if (path) {
+            drawPath(path);
+            setTimeout(() => {
+              board[r1][c1] = '';
+              board[r][c] = '';
+              renderBoard();
+              selected = null;
+              document.getElementById('matchSound').play().catch(()=>{});
+              if (checkClear()) {
+                setTimeout(() => {
+                  levelMsg.textContent = messages[level - 1] || "完成！";
+                  rewardBox.style.display = 'flex';
+                  const rewardImg = document.querySelector('#rewardImage img');
+                  if (level === maxLevel) {
+                    rewardImg.style.display = 'block';
+                  } else {
+                    rewardImg.style.display = 'none';
+                  }
+                  if (level >= maxLevel) {
+                    nextBtn.style.display = 'none';
+                  } else {
+                    nextBtn.style.display = 'inline-block';
+                  }
+                }, 500);
+              }
+            }, 200);
+          } else {
+            selected.classList.remove('selected');
+            selected = null;
+          }
+        } else {
+          selected.classList.remove('selected');
+          selected = null;
+        }
+      }
+    }
+
+    function checkClear() {
+      return board.flat().every(cell => !cell);
+    }
+
+    function findPath(r1, c1, r2, c2) {
+      const pad = Array.from({ length: ROWS + 2 }, (_, i) =>
+        Array.from({ length: COLS + 2 }, (_, j) => {
+          if (i === 0 || i === ROWS + 1 || j === 0 || j === COLS + 1) return '';
+          return board[i - 1][j - 1];
+        })
+      );
+      const sr = r1 + 1, sc = c1 + 1, tr = r2 + 1, tc = c2 + 1;
+      const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+      const visited = Array.from({ length: ROWS + 2 }, () =>
+        Array.from({ length: COLS + 2 }, () => Array(4).fill(Infinity))
+      );
+      const queue = [];
+      for (let d = 0; d < 4; d++) {
+        visited[sr][sc][d] = 0;
+        queue.push({ r: sr, c: sc, dir: d, turns: 0, path: [[sr, sc]] });
+      }
+      while (queue.length) {
+        const { r, c, dir, turns, path } = queue.shift();
+        const [dr, dc] = dirs[dir];
+        let nr = r + dr, nc = c + dc;
+        while (nr >= 0 && nr < ROWS + 2 && nc >= 0 && nc < COLS + 2 && (!pad[nr][nc] || (nr === tr && nc === tc))) {
+          if (turns > 2) break;
+          if (nr === tr && nc === tc) return path.concat([[nr, nc]]).map(([r, c]) => [r - 1, c - 1]);
+          for (let nd = 0; nd < 4; nd++) {
+            const nt = nd === dir ? turns : turns + 1;
+            if (nt <= 2 && visited[nr][nc][nd] > nt) {
+              visited[nr][nc][nd] = nt;
+              queue.push({ r: nr, c: nc, dir: nd, turns: nt, path: path.concat([[nr, nc]]) });
+            }
+          }
+          nr += dr;
+          nc += dc;
+        }
+      }
+      return null;
+    }
+
+    function drawPath(path) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const gap = 2;
+      const size = 43;
+      const offset = size + gap;
+
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      path.forEach(([r, c], i) => {
+        const x = c * offset + size / 2;
+        const y = r * offset + size / 2;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 300);
+    }
+
+    document.getElementById('nextLevelBtn').onclick = () => {
+      level++;
+      rewardBox.style.display = 'none';
+      generateBoard();
+      renderBoard();
+      updateLevelIndicator();
+    };
+
+    document.getElementById('restartBtn').onclick = () => {
+      generateBoard();
+      renderBoard();
+      selected = null;
+      updateLevelIndicator();
+    };
+
+    document.getElementById('resetBtn').onclick = () => {
+      level = 1;
+      generateBoard();
+      renderBoard();
+      rewardBox.style.display = 'none';
+      selected = null;
+      updateLevelIndicator();
+    };
+
+    generateBoard();
+    renderBoard();
+    updateLevelIndicator();
+  </script>
+</body>
+</html>
