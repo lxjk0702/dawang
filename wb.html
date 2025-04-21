@@ -396,22 +396,12 @@
     renderBoard();
     updateLevelIndicator();
   </script>
-  <!-- 访问次数统计容器，只有管理员时才显示，但不计入访问统计 -->
-<div id="busuanziBox" style="display: none; color:#555; font-size:14px; margin-top:20px;">
+  <div id="busuanziBox" style="display: none; color:#555; font-size:14px;">
   本页面被访问 <span id="busuanzi_value_page_pv"></span> 次
 </div>
-
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
 <script>
-  const isAdmin = window.location.search.includes('admin=1');
-
-  if (!isAdmin) {
-    // 只有普通用户加载 Busuanzi 脚本 → 会计入访问统计
-    const script = document.createElement('script');
-    script.src = "//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js";
-    script.async = true;
-    document.body.appendChild(script);
-  } else {
-    // 管理员手动显示统计数（但不增加计数）
+  if (window.location.search.includes('admin=1')) {
     document.getElementById('busuanziBox').style.display = 'block';
   }
 </script>
