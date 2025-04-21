@@ -396,5 +396,14 @@
     renderBoard();
     updateLevelIndicator();
   </script>
+  <div id="busuanziBox" style="display: none; color:#555; font-size:14px;">
+  本页面被访问 <span id="busuanzi_value_page_pv"></span> 次
+</div>
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<script>
+  if (window.location.search.includes('admin=1')) {
+    document.getElementById('busuanziBox').style.display = 'block';
+  }
+</script>
 </body>
 </html>
